@@ -1,4 +1,4 @@
-# SQL-GUI
+# How to activate the GUI
 
 Eg viðmælið at brúka Anaconda sum tín PATH heldur enn Python fyri at fáa hetta til at rigga.
 
