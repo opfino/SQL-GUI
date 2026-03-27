@@ -1,10 +1,9 @@
 # How to activate the GUI
 
-Eg viðmælið at brúka Anaconda sum tín PATH heldur enn Python fyri at fáa hetta til at rigga.
-
+I recommend using Anaconda over Python when choosing your PATH
 
 Við Anaconda:
-1. Conda must be used as the PATH on your Python or VSC for this to work when using Conda
+1. Conda (Currently works well with 'base (3.13.5)') must be used as the PATH on your Python or VSC for this to work when using Conda
 
 3. Afterwards, copy and paste this into your Anaconda Prompt. Not Windows cmd:
 conda activate base
