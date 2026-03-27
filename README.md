@@ -27,7 +27,7 @@ How to run the Banking GUI:
 
 4. Update database connection in GUI.py if needed
 
-5. Run. Example for how to run. Remember to use the full link in the folder, in addition to adding the file name and "" at the start and end:
+5. Example for how to run. Remember to use the full link in the folder, in addition to adding the file name and "" at the start and end:
    streamlit run "C:\Downloads\GUI.py"
 
 6. Then you should get an blue colored word asking for Email. So simply press enter.
