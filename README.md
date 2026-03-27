@@ -3,7 +3,7 @@
 Við Conda:
 1. Conda must be used as the PATH for this to work when using Conda
 
-3. Afterwards, copy and paste this into your Bash (or terminal if you're using VSC):
+3. Afterwards, copy and paste this into your Anaconda Prompt. Not Windows cmd:
 conda activate base
 
 4. then this:
