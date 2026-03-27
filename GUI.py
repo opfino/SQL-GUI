@@ -1,5 +1,4 @@
 
-
 import streamlit as st
 import pandas as pd
 import oracledb
@@ -56,12 +55,13 @@ def execute_dml(query, params=None):
         conn.close()
 
 
-def save_journal_entry(transaction_id, transaction_date, amount, trans_type,
+def save_Transaction_Entry(transaction_id, account_id, transaction_date, amount, trans_type,
                        entry_date_text, entry_type_num, create_both):
     conn = get_connection()
     cursor = conn.cursor()
 
     try:
+        # Insert into TRANSACTION table
         if create_both:
             cursor.execute(
                 '''
@@ -77,19 +77,41 @@ def save_journal_entry(transaction_id, transaction_date, amount, trans_type,
                 }
             )
 
+        # Insert into TRANSACTIONENTRY table with ACCOUNT_ID
         cursor.execute(
             """
             INSERT INTO TRANSACTIONENTRY
-            (TRANSACTION_ID, TRANSACTION_DATE, TRANSACTION_TYPE, AMOUNT)
-            VALUES (:tid, :tdate_txt, :ttype_num, :amount)
+            (TRANSACTION_ID, TRANSACTION_DATE, TRANSACTION_TYPE, AMOUNT, ACCOUNT_ID)
+            VALUES (:tid, :tdate_txt, :ttype_num, :amount, :acc_id)
             """,
             {
                 "tid": transaction_id,
                 "tdate_txt": entry_date_text,
                 "ttype_num": entry_type_num,
-                "amount": amount
+                "amount": amount,
+                "acc_id": account_id
             }
         )
+
+        # Update account balance
+        if trans_type == "Deposit":
+            cursor.execute(
+                """
+                UPDATE ACCOUNT
+                SET BALANCE = BALANCE + :amount
+                WHERE ACCOUNT_ID = :acc_id
+                """,
+                {"amount": amount, "acc_id": account_id}
+            )
+        elif trans_type == "Withdrawal":
+            cursor.execute(
+                """
+                UPDATE ACCOUNT
+                SET BALANCE = BALANCE - :amount
+                WHERE ACCOUNT_ID = :acc_id
+                """,
+                {"amount": amount, "acc_id": account_id}
+            )
 
         conn.commit()
 
@@ -111,7 +133,7 @@ menu = st.sidebar.radio(
     "Choose page",
     [
         "Home",
-        "Journal Entry",
+        "Transaction Entry",
         "Account Statement",
         "View Tables"
     ]
@@ -127,28 +149,25 @@ if menu == "Home":
         This GUI is built from your current Oracle schema.
 
         Available features:
-        - Enter journal entries
+        - Enter transaction entries
         - View accounts
         - View transactions
-        - View account table data
-
-        Note:
-        Your current schema does not link transactions directly to accounts,
-        so the account statement page can show account info and transaction info,
-        but not a perfect transaction-per-account statement.
+        - View account-specific transaction history
+        - View table data
         """
     )
 
 # =========================================================
-# JOURNAL ENTRY
+# TRANSACTION ENTRY
 # =========================================================
-elif menu == "Journal Entry":
-    st.header("Enter Journal Entry")
+elif menu == "Transaction Entry":
+    st.header("Enter Transaction Entry")
 
     col1, col2 = st.columns(2)
 
     with col1:
         transaction_id = st.text_input("Transaction ID", value="")
+        account_id = st.number_input("Account ID", min_value=0, step=1)
         transaction_date = st.date_input("Transaction Date", value=date.today())
         amount = st.number_input("Amount", min_value=0.0, step=1.0)
         trans_type = st.selectbox("Transaction Type", ["Deposit", "Withdrawal", "Transfer", "Other"])
@@ -160,13 +179,16 @@ elif menu == "Journal Entry":
 
     create_both = st.checkbox("Insert into both TRANSACTION and TRANSACTIONENTRY", value=True)
 
-    if st.button("Save Journal Entry"):
+    if st.button("Save Transaction Entry"):
         if not transaction_id.strip():
             st.error("Transaction ID is required.")
+        elif account_id == 0:
+            st.error("Account ID is required.")
         else:
             try:
-                save_journal_entry(
+                save_Transaction_Entry(
                     transaction_id=transaction_id.strip(),
+                    account_id=account_id,
                     transaction_date=transaction_date,
                     amount=amount,
                     trans_type=trans_type,
@@ -174,7 +196,7 @@ elif menu == "Journal Entry":
                     entry_type_num=entry_type_num,
                     create_both=create_both
                 )
-                st.success("Journal entry saved successfully.")
+                st.success("Transaction entry saved successfully.")
 
             except Exception as e:
                 st.error(f"Error saving entry: {e}")
@@ -187,7 +209,7 @@ elif menu == "Account Statement":
 
     st.subheader("Account Lookup")
 
-    account_id = st.number_input("Enter Account ID", min_value=0, step=1)
+    account_id = st.number_input("Enter Account ID", min_value=0, step=1, key="statement_account_id")
 
     if st.button("Show Account"):
         try:
@@ -211,8 +233,7 @@ elif menu == "Account Statement":
 
     st.divider()
 
-    st.subheader("All Transactions")
-    st.write("Because the current schema has no ACCOUNT_ID inside TRANSACTIONENTRY, transactions cannot be filtered by account correctly.")
+    st.subheader("Transactions for Selected Account")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -224,19 +245,32 @@ elif menu == "Account Statement":
         try:
             df_trans = fetch_dataframe(
                 '''
-                SELECT TRANSACTION_ID, DATE_OF_TRANSACTION, AMOUNT, TYPE
-                FROM "TRANSACTION"
-                WHERE DATE_OF_TRANSACTION BETWEEN :from_d AND :to_d
-                ORDER BY DATE_OF_TRANSACTION, TRANSACTION_ID
+                SELECT te.TRANSACTION_ID,
+                       te.ACCOUNT_ID,
+                       te.TRANSACTION_DATE,
+                       te.TRANSACTION_TYPE,
+                       te.AMOUNT,
+                       t.DATE_OF_TRANSACTION,
+                       t.TYPE
+                FROM TRANSACTIONENTRY te
+                LEFT JOIN "TRANSACTION" t
+                    ON te.TRANSACTION_ID = t.TRANSACTION_ID
+                WHERE te.ACCOUNT_ID = :acc_id
+                  AND (
+                        t.DATE_OF_TRANSACTION BETWEEN :from_d AND :to_d
+                        OR t.DATE_OF_TRANSACTION IS NULL
+                      )
+                ORDER BY te.TRANSACTION_ID
                 ''',
                 {
+                    "acc_id": account_id,
                     "from_d": from_date,
                     "to_d": to_date
                 }
             )
 
             if df_trans.empty:
-                st.info("No transactions found in that date range.")
+                st.info("No transactions found for that account in that date range.")
             else:
                 st.write("### Transactions")
                 st.dataframe(df_trans, use_container_width=True)
